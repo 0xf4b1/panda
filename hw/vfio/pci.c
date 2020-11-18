@@ -2612,6 +2612,10 @@ static void vfio_unregister_req_notifier(VFIOPCIDevice *vdev)
 static void vfio_realize(PCIDevice *pdev, Error **errp)
 {
     VFIOPCIDevice *vdev = DO_UPCAST(VFIOPCIDevice, pdev, pdev);
+
+    if (vdev->replay)
+        return;
+
     VFIODevice *vbasedev_iter;
     VFIOGroup *group;
     char *tmp, group_path[PATH_MAX], *group_name;
@@ -2898,6 +2902,9 @@ static void vfio_pci_reset(DeviceState *dev)
     PCIDevice *pdev = DO_UPCAST(PCIDevice, qdev, dev);
     VFIOPCIDevice *vdev = DO_UPCAST(VFIOPCIDevice, pdev, pdev);
 
+    if (vdev->replay)
+        return;
+
     trace_vfio_pci_reset(vdev->vbasedev.name);
 
     vfio_pci_pre_reset(vdev);
@@ -2965,6 +2972,7 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_UINT32("x-pci-sub-device-id", VFIOPCIDevice,
                        sub_device_id, PCI_ANY_ID),
     DEFINE_PROP_UINT32("x-igd-gms", VFIOPCIDevice, igd_gms, 0),
+    DEFINE_PROP_BOOL("replay", VFIOPCIDevice, replay, false),
     /*
      * TODO - support passed fds... is this necessary?
      * DEFINE_PROP_STRING("vfiofd", VFIOPCIDevice, vfiofd_name),
@@ -2975,7 +2983,12 @@ static Property vfio_pci_dev_properties[] = {
 
 static const VMStateDescription vfio_pci_vmstate = {
     .name = "vfio-pci",
-    .unmigratable = 1,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_PCI_DEVICE(pdev, VFIOPCIDevice),
+        VMSTATE_END_OF_LIST()
+    }
 };
 
 static void vfio_pci_dev_class_init(ObjectClass *klass, void *data)
