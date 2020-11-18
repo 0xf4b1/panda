@@ -40,3 +40,4 @@ wintrospection
 winxpx86intro
 syscalls_logger
 nv_dma
+nv_ioctl
