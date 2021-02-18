@@ -40,7 +40,7 @@ static inline uint32_t checksum(dma_page *page) {
     size_t remaining = page->size;
     while (remaining > 0) {
         uint32_t sz = remaining >= UINT32_MAX ? UINT32_MAX : (uint32_t)remaining;
-        crc = crc32(crc, page->ptr + offset, sz);
+        crc = crc32(crc, (unsigned char *)page->ptr + offset, sz);
         remaining -= sz;
         offset += sz;
     }
@@ -75,13 +75,17 @@ void read_dma_log(CPUState *cpu, target_ptr_t addr) {
     }
 
     char buf[next_dma_log->size];
-    fread(&buf, next_dma_log->size, 1, dma_record);
+    if (!fread(&buf, next_dma_log->size, 1, dma_record)) {
+        printf("Error reading DMA data\n");
+        exit(-1);
+    }
 
     if (panda_physical_memory_rw((addr & 0xFFFFF000), (uint8_t *)&buf, next_dma_log->size, 1))
         printf("DMA write failed!\n");
 
     if (!fread(next_dma_log, sizeof(dma_log), 1, dma_record)) {
         printf("No more DMA records.\n");
+        free(next_dma_log);
         next_dma_log = NULL;
     }
 }
@@ -275,8 +279,15 @@ bool init_plugin(void *self) {
     if (replay || replay_fast) {
         // Open DMA record and read first entry
         dma_record = fopen("dma_record.log", "rb");
+        if (!dma_record) {
+            printf("DMA record missing\n");
+            return false;
+        }
         next_dma_log = (dma_log *)malloc(sizeof(dma_log));
-        fread(next_dma_log, sizeof(dma_log), 1, dma_record);
+        if (!fread(next_dma_log, sizeof(dma_log), 1, dma_record)) {
+            printf("DMA log is empty!\n");
+            return false;
+        }
     } else {
         // Open file for DMA record writing
         dma_record = fopen("dma_record.log", "wb");
